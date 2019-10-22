@@ -101,26 +101,24 @@ namespace UnitySimpleLiquid
             var containerOrientation = liquidContainer.transform.rotation;
 
             // Points on bottleneck radius (local space)
-            var angleStep = 0.1f;
-            var localPoints = new List<Vector3>();
+            var angleStep = 0.1f;            
+			Vector3 min = Vector3.positiveInfinity; //really high vector
+			Vector3 tmpPoint;
+
             for (float a = 0; a < Mathf.PI * 2f; a += angleStep)
             {
-                var x = BottleneckRadiusWorld * Mathf.Cos(a);
-                var z = BottleneckRadiusWorld * Mathf.Sin(a);
 
-                localPoints.Add(new Vector3(x, 0, z));
+				//Get local point				
+				tmpPoint.x = BottleneckRadiusWorld * Mathf.Cos(a);
+				tmpPoint.y = 0;
+				tmpPoint.z = BottleneckRadiusWorld * Mathf.Sin(a);
+				//Transform to world point
+				tmpPoint = BottleneckPos + containerOrientation * tmpPoint;
+				//Was it smaller than last one?
+				if (tmpPoint.y < min.y)
+					min = tmpPoint;
             }
 
-            // Transfer points from local to global
-            var worldPoints = new List<Vector3>();
-            foreach (var locPoint in localPoints)
-            {
-                var worldPoint = BottleneckPos + containerOrientation * locPoint;
-                worldPoints.Add(worldPoint);
-            }
-
-            // Find the lowest one
-            var min = worldPoints.OrderBy((pt) => pt.y).First();
             return min;
 
         }
@@ -357,14 +355,17 @@ namespace UnitySimpleLiquid
 			// Using the non-allocating physics APIs
 			// https://docs.unity3d.com/Manual/BestPracticeUnderstandingPerformanceInUnity7.html
 			// Specifying a distance for this raycast is very important so we dont hit too many objects
-			float numberOfHits = Physics.RaycastNonAlloc(backwardsRay, rayCastBuffer);			
-
+			float numberOfHits = Physics.RaycastNonAlloc(backwardsRay, rayCastBuffer);
+			RaycastHit thisHit = new RaycastHit
+			{
+				distance = float.MaxValue
+			};
 			// To save on the GC which can kill VR, sort the results ourselves			
 			for (int i = 0; i < numberOfHits; i++)
 			{
 				// https://answers.unity.com/questions/752382/how-to-compare-if-two-gameobjects-are-the-same-1.html
 				//We only want to get this position on the original object we hit off of
-				if (rayCastBuffer[i].distance < hit.distance && GameObject.ReferenceEquals(rayCastBuffer[i].collider.gameObject, objHit))
+				if (rayCastBuffer[i].distance < thisHit.distance && GameObject.ReferenceEquals(rayCastBuffer[i].collider.gameObject, objHit))
 				{
 					//We hit the object the liquid is running down!
 					raycasthit = edgePosition = rayCastBuffer[i].point;
