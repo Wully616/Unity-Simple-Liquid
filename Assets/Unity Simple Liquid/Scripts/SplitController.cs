@@ -22,11 +22,18 @@ namespace UnitySimpleLiquid
 		[Tooltip("Number number of objects the liquid will hit off and continue flowing")]
 		public int maxEdgeDrops = 4;
 		private int currentDrop;
-
+		[Tooltip("Number of objects the raycast is able to store, increase if objects / containers are not found")]
+		public int rayCastBufferSize = 10;
+		private RaycastHit[] rayCastBuffer;
 		public ParticleSystem particlesPrefab;
 
-        #region Particles
-        private ParticleSystem particles;
+		private void Start()
+		{
+			rayCastBuffer = new RaycastHit[rayCastBufferSize];
+		}
+
+		#region Particles
+		private ParticleSystem particles;
         public ParticleSystem Particles
         {
             get
@@ -94,26 +101,24 @@ namespace UnitySimpleLiquid
             var containerOrientation = liquidContainer.transform.rotation;
 
             // Points on bottleneck radius (local space)
-            var angleStep = 0.1f;
-            var localPoints = new List<Vector3>();
+            var angleStep = 0.1f;            
+			Vector3 min = Vector3.positiveInfinity; //really high vector
+			Vector3 tmpPoint;
+
             for (float a = 0; a < Mathf.PI * 2f; a += angleStep)
             {
-                var x = BottleneckRadiusWorld * Mathf.Cos(a);
-                var z = BottleneckRadiusWorld * Mathf.Sin(a);
 
-                localPoints.Add(new Vector3(x, 0, z));
+				//Get local point				
+				tmpPoint.x = BottleneckRadiusWorld * Mathf.Cos(a);
+				tmpPoint.y = 0;
+				tmpPoint.z = BottleneckRadiusWorld * Mathf.Sin(a);
+				//Transform to world point
+				tmpPoint = BottleneckPos + containerOrientation * tmpPoint;
+				//Was it smaller than last one?
+				if (tmpPoint.y < min.y)
+					min = tmpPoint;
             }
 
-            // Transfer points from local to global
-            var worldPoints = new List<Vector3>();
-            foreach (var locPoint in localPoints)
-            {
-                var worldPoint = BottleneckPos + containerOrientation * locPoint;
-                worldPoints.Add(worldPoint);
-            }
-
-            // Find the lowest one
-            var min = worldPoints.OrderBy((pt) => pt.y).First();
             return min;
 
         }
@@ -271,57 +276,56 @@ namespace UnitySimpleLiquid
 		private RaycastHit FindLiquidContainer(Vector3 splitPos, GameObject ignoreCollision)
 		{
 			
-			var ray = new Ray(splitPos, Vector3.down);
+			Ray ray = new Ray(splitPos, Vector3.down);
 
 			// Check all colliders under ours
-			var hits = Physics.SphereCastAll(ray, splashSize);
-			hits = hits.OrderBy((h) => h.distance).ToArray();
+			// Using the non-allocating physics APIs
+			// https://docs.unity3d.com/Manual/BestPracticeUnderstandingPerformanceInUnity7.html
 
-			foreach (var hit in hits)
+			float numberOfHits = Physics.SphereCastNonAlloc(ray, splashSize, rayCastBuffer);
+
+			// Sort the results ourselves
+			RaycastHit hit = new RaycastHit
 			{
-				//Ignore ourself
-				if (!GameObject.ReferenceEquals(hit.collider.gameObject, ignoreCollision) && !hit.collider.isTrigger)
+				distance = float.MaxValue
+			};
+			//We shouldn't need to clear the array since the raycast will fill from buffer[0] and it returns the number of hits
+			for (int i=0; i< numberOfHits; i++)
+			{								
+				if (rayCastBuffer[i].distance < hit.distance && !GameObject.ReferenceEquals(rayCastBuffer[i].collider.gameObject, ignoreCollision) && !rayCastBuffer[i].collider.isTrigger)
 				{
-					
-					// does it even a split controller
-					var liquid = hit.collider.GetComponent<SplitController>();
-					if (liquid && liquid != this)
+					hit = rayCastBuffer[i];
+				}
+			}
+
+			// does it even a split controller
+			SplitController liquid = hit.collider.GetComponent<SplitController>();
+			if (liquid)
+			{
+				return hit;
+			}
+			else
+			{
+				//Something other than a liquid splitter is in the way
+
+				//If we have already dropped down off too many objects, break
+				if (currentDrop < maxEdgeDrops)
+				{
+					//Simulate the liquid running off an object it hits and continuing down from the edge of the liquid
+					//Does not take velocity into account
+
+					//First get the slope direction
+					Vector3 slope = GetSlopeDirection(Vector3.up, hit.normal);
+
+					//Next we try to find the edge of the object the liquid would roll off
+					//This really only works for primitive objects, it would look weird on other stuff
+					Vector3 edgePosition = TryGetSlopeEdge(slope, hit);
+					if (edgePosition != Vector3.zero)
 					{
-						
-						return hit;
-						
-					}
-
-
-					//Something other than a liquid splitter is in the way
-					if (!liquid)
-					{
-						//If we have already dropped down off too many objects, break
-						
-						if (currentDrop >= maxEdgeDrops)
-						{
-							//if we have rolled down too many objects, return empty hit
-							//This assumes at this point the liquid has "dried up" rather than pouring from the last valid point
-							return new RaycastHit();
-						}
-						//Simulate the liquid running off an object it hits and continuing down from the edge of the liquid
-						//Does not take velocity into account
-
-						//First get the slope direction
-						Vector3 slope = GetSlopeDirection(Vector3.up, hit.normal);
-
-						//Next we try to find the edge of the object the liquid would roll off
-						//This really only works for primitive objects, it would look weird on other stuff
-						Vector3 edgePosition = TryGetSlopeEdge(slope, hit);
-						if (edgePosition != Vector3.zero)
-						{
-							//edge position found, surface must be tilted
-							//Now we can try to transfer the liquid from this position
-							currentDrop++;
-							return FindLiquidContainer(edgePosition, hit.collider.gameObject);
-
-						}
-						return new RaycastHit();
+						//edge position found, surface must be tilted
+						//Now we can try to transfer the liquid from this position
+						currentDrop++;
+						return FindLiquidContainer(edgePosition, hit.collider.gameObject);
 					}
 				}
 			}
@@ -354,32 +358,39 @@ namespace UnitySimpleLiquid
 			return Vector3.Cross(Vector3.Cross(up, normal), normal).normalized;
 		}
 
+		private Vector3 moveDown = new Vector3(0f, -0.0001f, 0f);
 		private Vector3 TryGetSlopeEdge(Vector3 slope, RaycastHit hit)
 		{
 			Vector3 edgePosition = Vector3.zero;
-
-			// We need to pick a position outside of the object to raycast back towards it to find an edge.
-			// We need a position slightly down so it will hit the edge of the object
-			Vector3 moveDown = new Vector3(0f, -0.0001f, 0f);
-			// We also need to move the position outside of the objects bounding box, so we actually hit it
+			//flip a raycast so it faces backwards towards the object we hit, move it slightly down so it will hit the edge of the object
+			
 			float dist = GetIdealRayCastDist(hit.collider.bounds, hit.point, slope);
 
 			Vector3 reverseRayPos = hit.point + moveDown + (slope * dist);
 			raycastStart = reverseRayPos;
 			Ray backwardsRay = new Ray(reverseRayPos, -slope);
-			RaycastHit[] revHits = Physics.RaycastAll(backwardsRay);
 
-			foreach (var revHit in revHits)
+			// Using the non-allocating physics APIs
+			// https://docs.unity3d.com/Manual/BestPracticeUnderstandingPerformanceInUnity7.html
+			// Specifying a distance for this raycast is very important so we dont hit too many objects
+			float numberOfHits = Physics.RaycastNonAlloc(backwardsRay, rayCastBuffer);
+			RaycastHit thisHit = new RaycastHit
+			{
+				distance = float.MaxValue
+			};
+			// To save on the GC which can kill VR, sort the results ourselves			
+			for (int i = 0; i < numberOfHits; i++)
 			{
 				// https://answers.unity.com/questions/752382/how-to-compare-if-two-gameobjects-are-the-same-1.html
 				//We only want to get this position on the original object we hit off of
-				if (GameObject.ReferenceEquals(revHit.collider.gameObject, hit.collider.gameObject))
+				if (rayCastBuffer[i].distance < thisHit.distance && GameObject.ReferenceEquals(rayCastBuffer[i].collider.gameObject, hit.collider.gameObject))
 				{
 					//We hit the object the liquid is running down!
-					raycasthit = edgePosition = revHit.point;
+					raycasthit = edgePosition = rayCastBuffer[i].point;
 					break;
-				}
+				}				
 			}
+
 			return edgePosition;
 		}
 		#endregion
