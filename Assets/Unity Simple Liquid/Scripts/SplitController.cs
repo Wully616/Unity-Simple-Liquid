@@ -279,11 +279,10 @@ namespace UnitySimpleLiquid
 			// Check all colliders under ours
 			// Using the non-allocating physics APIs
 			// https://docs.unity3d.com/Manual/BestPracticeUnderstandingPerformanceInUnity7.html
-			
+
 			float numberOfHits = Physics.SphereCastNonAlloc(ray, splashSize, rayCastBuffer);
 
-			//rayCastBuffer = rayCastBuffer.OrderBy((h) => h.distance).ToArray();
-			// To save on the GC which can kill VR, sort the results ourselves
+			// Sort the results ourselves
 			RaycastHit hit = new RaycastHit
 			{
 				distance = float.MaxValue
@@ -340,6 +339,7 @@ namespace UnitySimpleLiquid
 			return Vector3.Cross(Vector3.Cross(up, normal), normal);
 		}
 
+		private Vector3 moveDown = new Vector3(0f, -0.0001f, 0f);
 		private Vector3 TryGetSlopeEdge(Vector3 slope, RaycastHit hit)
 		{
 			Vector3 edgePosition = Vector3.zero;
@@ -347,7 +347,7 @@ namespace UnitySimpleLiquid
 			GameObject objHit = hit.collider.gameObject;
 
 			//flip a raycast so it faces backwards towards the object we hit, move it slightly down so it will hit the edge of the object
-			Vector3 moveDown = new Vector3(0f, -0.0001f, 0f);
+			
 			Vector3 reverseRayPos = hit.point + moveDown + (slope.normalized);
 
 			Ray backwardsRay = new Ray(reverseRayPos, -slope.normalized);
