@@ -236,14 +236,8 @@ namespace UnitySimpleLiquid
             // Transfer liquid to other container (if possible)
             liquidContainer.FillAmountPercent = newLiquidAmmount;
 
-			RaycastHit containerHit = FindLiquidContainer(splitPos, this.gameObject);
+			FindLiquidContainer(splitPos, liquidStep, flowScale, this.gameObject);
 			
-			//RaycastHit is a struct which gives us everything we need
-			if (containerHit.collider != null)
-			{
-				TransferLiquid(containerHit, liquidStep, flowScale);
-
-			}
 			// Start particles effect
 			StartEffect(splitPos, flowScale);
 		}
@@ -253,27 +247,28 @@ namespace UnitySimpleLiquid
 		private Vector3 raycasthit;
 		private Vector3 raycastStart;
 
-		private void TransferLiquid(RaycastHit hit, float lostPercentAmount, float scale)
+		private bool TransferLiquid(RaycastHit hit, float lostPercentAmount, float scale)
         {
-			var liquid = hit.collider.GetComponent<SplitController>();
-			
-			var otherBottleneck = liquid.GenerateBottleneckPos();
-			var radius = liquid.BottleneckRadiusWorld;
-
-			var hitPoint = hit.point;
-
-			// Does we touched bottleneck?
-			var insideRadius = Vector3.Distance(hitPoint, otherBottleneck) < radius + splashSize * scale;
-			if (insideRadius)
+			SplitController liquid = hit.collider.GetComponent<SplitController>();
+			if (liquid != null)
 			{
-				var lostAmount = liquidContainer.Volume * lostPercentAmount;
-				liquid.liquidContainer.FillAmount += lostAmount;
-			}
+				Vector3 otherBottleneck = liquid.GenerateBottleneckPos();
+				float radius = liquid.BottleneckRadiusWorld;
 
+				// Does we touched bottleneck?
+				bool insideRadius = Vector3.Distance(hit.point, otherBottleneck) < radius + splashSize * scale;
+				if (insideRadius)
+				{
+					float lostAmount = liquidContainer.Volume * lostPercentAmount;
+					liquid.liquidContainer.FillAmount += lostAmount;
+					return true;
+				}
+			}
+			return false;
 			
 		}
 		
-		private RaycastHit FindLiquidContainer(Vector3 splitPos, GameObject ignoreCollision)
+		private void FindLiquidContainer(Vector3 splitPos, float lostPercentAmount, float scale, GameObject ignoreCollision)
 		{
 			
 			Ray ray = new Ray(splitPos, Vector3.down);
@@ -298,13 +293,8 @@ namespace UnitySimpleLiquid
 				}
 			}
 
-			// does it even a split controller
-			SplitController liquid = hit.collider.GetComponent<SplitController>();
-			if (liquid)
-			{
-				return hit;
-			}
-			else
+			// Try to transfer liquid to it, if it fails we should roll liquid off the edge of the container or whatever else it might be
+			if (!TransferLiquid(hit, lostPercentAmount, scale))
 			{
 				//Something other than a liquid splitter is in the way
 
@@ -325,11 +315,10 @@ namespace UnitySimpleLiquid
 						//edge position found, surface must be tilted
 						//Now we can try to transfer the liquid from this position
 						currentDrop++;
-						return FindLiquidContainer(edgePosition, hit.collider.gameObject);
+						FindLiquidContainer(edgePosition, lostPercentAmount, scale, hit.collider.gameObject);
 					}
 				}
 			}
-			return new RaycastHit();
 		}
 
 		#endregion
