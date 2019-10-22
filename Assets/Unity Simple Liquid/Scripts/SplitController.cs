@@ -291,7 +291,7 @@ namespace UnitySimpleLiquid
 			//We shouldn't need to clear the array since the raycast will fill from buffer[0] and it returns the number of hits
 			for (int i=0; i< numberOfHits; i++)
 			{								
-				if (rayCastBuffer[i].distance < hit.distance && rayCastBuffer[i].collider && !GameObject.ReferenceEquals(rayCastBuffer[i].collider.gameObject, ignoreCollision) && !rayCastBuffer[i].collider.isTrigger)
+				if (rayCastBuffer[i].distance < hit.distance && !GameObject.ReferenceEquals(rayCastBuffer[i].collider.gameObject, ignoreCollision) && !rayCastBuffer[i].collider.isTrigger)
 				{
 					hit = rayCastBuffer[i];
 				}
