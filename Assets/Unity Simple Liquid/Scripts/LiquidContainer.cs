@@ -43,9 +43,9 @@ namespace UnitySimpleLiquid
 		private bool customVolume;
         private float volume = 1f;
 
-        #region Liquid Amount
-        // After this values shader might become unstable
-        private const float minFillAmount = 0.1f;
+		#region Liquid Amount
+		// After this values shader might become unstable
+		private const float minFillAmount = 0.1f;
         private const float maxFillAmount = 0.99f;
 
         public bool IsOpen
@@ -292,10 +292,80 @@ namespace UnitySimpleLiquid
                     MaterialInstance.color = liquidColor;
             }
         }
-        #endregion
+		
+		/// <summary>
+		/// Add more liquid to the container in litres
+		/// </summary>
+		public void AddLiquid(Color color, float amount)
+		{
+			
+			if (amount > 0)
+			{
+				//If the container is empty, the new color should be set as this containers color
+				if (FillAmount == 0)
+				{
+					FillAmount += amount;
+					LiquidColor = color;
+					return;					
+				}
 
-        #region Wobble Effect
-        private const float rotCoef = 0.2f;
+				FillAmount += amount;
+				AddColorHybrid(color, amount);
+			}
+
+		}
+
+		public void AddColorHybrid(Color color, float amount)
+		{
+			// Only mix the hue without losing saturation and separating out alpha blending logic
+
+			// Convert this colour to HSV
+			Color.RGBToHSV(LiquidColor, out float h1, out float s1, out float v1);
+			// Scale the added colour
+			Color colorScaled = color * amount *0.25f;
+
+			//Average the two colours being mixed.
+			Color mix = ((colorScaled + LiquidColor) / 2f);
+			
+
+			// Convert the mixed colour to HSV
+			Color.RGBToHSV(mix, out float h2, out float s2, out float v2);
+			
+			//  The new colour uses the new Hue, but with original colours saturation and value
+			Color newColor = Color.HSVToRGB(h2, s1, v1);
+			
+			// Blend the alpha nicely, so the alpha shifts to the alpha of the liquid being added, ie being diluted or becoming more opaque as an opaque liquid is added
+			newColor.a = calculateAlpha(LiquidColor.a, color.a, amount);
+			LiquidColor = newColor;
+		}
+
+		private float calculateAlpha(float Original, float AddedColour, float amount)
+		{
+			float alpha;
+			float diff;
+			if (AddedColour > Original)
+			{
+				diff = AddedColour - Original;
+				alpha = Original + ((AddedColour - Original) * amount);
+			}
+			else
+			{
+				diff = Original - AddedColour;
+				alpha = Original - ((Original - AddedColour) * amount);
+
+			}
+
+			if (diff < 0.001f)
+			{
+				alpha = AddedColour;
+			}
+			return Mathf.Clamp01(alpha);
+		}
+		
+		#endregion
+
+		#region Wobble Effect
+		private const float rotCoef = 0.2f;
 
         private Vector3 lastPos, lastUp;
         private Vector3 wobbleAcm;
