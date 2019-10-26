@@ -260,7 +260,8 @@ namespace UnitySimpleLiquid
 				if (insideRadius)
 				{
 					float lostAmount = liquidContainer.Volume * lostPercentAmount;
-					liquid.liquidContainer.FillAmount += lostAmount;
+					liquid.liquidContainer.AddLiquid(this.liquidContainer.LiquidColor, lostAmount);
+					
 					return true;
 				}
 			}
