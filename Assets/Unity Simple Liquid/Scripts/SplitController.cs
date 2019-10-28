@@ -232,10 +232,27 @@ namespace UnitySimpleLiquid
 		//Used for Gizmo only
 		private Vector3 raycasthit;
 		private Vector3 raycastStart;
+		private SplitController lastLiquid;
+		private GameObject lastContainer;
 
 		private bool TransferLiquid(RaycastHit hit, float lostPercentAmount, float scale)
         {
-			SplitController liquid = hit.collider.GetComponent<SplitController>();
+			
+			SplitController liquid;
+			GameObject container = hit.collider.gameObject;
+			//Is this the same object we already hit?
+			if (GameObject.ReferenceEquals(lastContainer, container))
+			{
+				liquid = lastLiquid;
+			} else
+			{
+				// We hit a different container from the last timee!
+				// Rather than doing expensive GetComponent, if were still hitting the same object, lets cache it
+				liquid = container.GetComponent<SplitController>();
+				lastContainer = container;
+
+			}
+
 			if (liquid != null)
 			{
 				Vector3 otherBottleneck = liquid.GenerateBottleneckPos();
@@ -264,45 +281,51 @@ namespace UnitySimpleLiquid
 			// Using the non-allocating physics APIs
 			// https://docs.unity3d.com/Manual/BestPracticeUnderstandingPerformanceInUnity7.html
 
-			float numberOfHits = Physics.SphereCastNonAlloc(ray, splashSize, rayCastBuffer);
-
+			int numberOfHits = Physics.SphereCastNonAlloc(ray, splashSize, rayCastBuffer);
 			// Sort the results ourselves
-			RaycastHit hit = new RaycastHit
-			{
-				distance = float.MaxValue
-			};
+			float distance = float.MaxValue;
+			int index = -1;
+
 			//We shouldn't need to clear the array since the raycast will fill from buffer[0] and it returns the number of hits
-			for (int i=0; i< numberOfHits; i++)
-			{								
-				if (rayCastBuffer[i].distance < hit.distance && !GameObject.ReferenceEquals(rayCastBuffer[i].collider.gameObject, ignoreCollision) && !rayCastBuffer[i].collider.isTrigger)
+			for (int i = 0; i < numberOfHits; i++)
+			{
+				if (rayCastBuffer[i].distance < distance && !GameObject.ReferenceEquals(rayCastBuffer[i].collider.gameObject, ignoreCollision) && !rayCastBuffer[i].collider.isTrigger)
 				{
-					hit = rayCastBuffer[i];
+					distance = rayCastBuffer[i].distance;
+					index = i;
 				}
 			}
-
-			// Try to transfer liquid to it, if it fails we should roll liquid off the edge of the container or whatever else it might be
-			if (!TransferLiquid(hit, lostPercentAmount, scale))
+	
+			
+			if (index > -1)
 			{
-				//Something other than a liquid splitter is in the way
-
-				//If we have already dropped down off too many objects, break
-				if (currentDrop < maxEdgeDrops)
+				// Try to transfer liquid to it, if it fails we should roll liquid off the edge of the container or whatever else it might be
+				if (!TransferLiquid(rayCastBuffer[index], lostPercentAmount, scale))
 				{
-					//Simulate the liquid running off an object it hits and continuing down from the edge of the liquid
-					//Does not take velocity into account
+					//Something other than a liquid splitter is in the way
 
-					//First get the slope direction
-					Vector3 slope = GetSlopeDirection(Vector3.up, hit.normal);
-
-					//Next we try to find the edge of the object the liquid would roll off
-					//This really only works for primitive objects, it would look weird on other stuff
-					Vector3 edgePosition = TryGetSlopeEdge(slope, hit);
-					if (edgePosition != Vector3.zero)
+					//If we have already dropped down off too many objects, break
+					if (currentDrop < maxEdgeDrops)
 					{
-						//edge position found, surface must be tilted
-						//Now we can try to transfer the liquid from this position
-						currentDrop++;
-						FindLiquidContainer(edgePosition, lostPercentAmount, scale, hit.collider.gameObject);
+						//Simulate the liquid running off an object it hits and continuing down from the edge of the liquid
+						//Does not take velocity into account
+
+						// if the thing we hit is facing straight up, it has no slope
+						if (Vector3.up != rayCastBuffer[index].normal)
+						{
+							//First get the slope direction
+							Vector3 slope = GetSlopeDirection(Vector3.up, rayCastBuffer[index].normal);
+							//Next we try to find the edge of the object the liquid would roll off
+							//This really only works for primitive objects, it would look weird on other stuff
+							Vector3 edgePosition = TryGetSlopeEdge(slope, rayCastBuffer[index]);
+							if (edgePosition != Vector3.zero)
+							{
+								//edge position found, surface must be tilted
+								//Now we can try to transfer the liquid from this position
+								currentDrop++;
+								FindLiquidContainer(edgePosition, lostPercentAmount, scale, rayCastBuffer[index].collider.gameObject);
+							}
+						}
 					}
 				}
 			}
