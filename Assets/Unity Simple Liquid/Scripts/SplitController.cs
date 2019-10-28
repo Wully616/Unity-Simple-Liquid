@@ -91,35 +91,18 @@ namespace UnitySimpleLiquid
             return pos;
         }
 
-		private Vector3 BottleLowestPoint;
+
         private Vector3 GenerateBottleneckLowesPoint()
         {
             if (!liquidContainer)
                 return Vector3.zero;
 
-            // TODO: This code is not optimal and can be done much better
-            // Righ now it caluclates minimal point of the circle (in 3d) by brute force
-            var containerOrientation = liquidContainer.transform.rotation;
+            // Calculate the direction vector of the bottlenecks slope
+            
+			Vector3 bottleneckSlope = GetSlopeDirection(Vector3.up, bottleneckPlane.normal);
 
-            // Points on bottleneck radius (local space)
-            var angleStep = 0.1f;            
-			Vector3 min = Vector3.positiveInfinity; //really high vector
-			Vector3 tmpPoint;
-
-            for (float a = 0; a < Mathf.PI * 2f; a += angleStep)
-            {
-
-				//Get local point				
-				tmpPoint.x = BottleneckRadiusWorld * Mathf.Cos(a);
-				tmpPoint.y = 0;
-				tmpPoint.z = BottleneckRadiusWorld * Mathf.Sin(a);
-				//Transform to world point
-				tmpPoint = BottleneckPos + containerOrientation * tmpPoint;
-				BottleLowestPoint = tmpPoint;
-				//Was it smaller than last one?
-				if (tmpPoint.y < min.y)
-					min = tmpPoint;
-            }
+			// Find a position along the slope the side of the bottleneck radius
+			Vector3 min = BottleneckPos + bottleneckSlope * BottleneckRadiusWorld;
 			
 
 			return min;
@@ -148,8 +131,6 @@ namespace UnitySimpleLiquid
                 Gizmos.color = Color.yellow;
                 Gizmos.DrawSphere(raycasthit, 0.01f);
 				Gizmos.DrawSphere(raycastStart, 0.01f);
-				Gizmos.color = Color.blue;
-				Gizmos.DrawSphere(BottleLowestPoint, 0.005f);
 			}
 		}
 		#endregion
