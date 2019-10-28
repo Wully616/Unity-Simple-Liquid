@@ -91,6 +91,7 @@ namespace UnitySimpleLiquid
             return pos;
         }
 
+		private Vector3 BottleLowestPoint;
         private Vector3 GenerateBottleneckLowesPoint()
         {
             if (!liquidContainer)
@@ -114,12 +115,14 @@ namespace UnitySimpleLiquid
 				tmpPoint.z = BottleneckRadiusWorld * Mathf.Sin(a);
 				//Transform to world point
 				tmpPoint = BottleneckPos + containerOrientation * tmpPoint;
+				BottleLowestPoint = tmpPoint;
 				//Was it smaller than last one?
 				if (tmpPoint.y < min.y)
 					min = tmpPoint;
             }
+			
 
-            return min;
+			return min;
 
         }
         #endregion
@@ -145,6 +148,8 @@ namespace UnitySimpleLiquid
                 Gizmos.color = Color.yellow;
                 Gizmos.DrawSphere(raycasthit, 0.01f);
 				Gizmos.DrawSphere(raycastStart, 0.01f);
+				Gizmos.color = Color.blue;
+				Gizmos.DrawSphere(BottleLowestPoint, 0.005f);
 			}
 		}
 		#endregion
