@@ -322,7 +322,7 @@ namespace UnitySimpleLiquid
 			// Convert this colour to HSV
 			Color.RGBToHSV(LiquidColor, out float h1, out float s1, out float v1);
 			// Scale the added colour
-			Color colorScaled = color * amount *0.25f;
+			Color colorScaled = color * amount ;
 
 			//Average the two colours being mixed.
 			Color mix = ((colorScaled + LiquidColor) / 2f);
