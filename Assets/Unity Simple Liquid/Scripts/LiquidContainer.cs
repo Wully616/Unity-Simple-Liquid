@@ -174,14 +174,14 @@ namespace UnitySimpleLiquid
         {
             if (fillAmountPercent > 0f)
             {
-                SurfaceLevel = CalculateWoldSurfaceLevel();
+                SurfaceLevel = CalculateWorldSurfaceLevel();
                 liquidRender.enabled = true;
             }
             else
                 liquidRender.enabled = false;
         }
 
-        private Vector3 CalculateWoldSurfaceLevel()
+        private Vector3 CalculateWorldSurfaceLevel()
         {
             var bounds = liquidRender.bounds;
             var min = bounds.min.y;
