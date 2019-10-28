@@ -232,10 +232,29 @@ namespace UnitySimpleLiquid
 		//Used for Gizmo only
 		private Vector3 raycasthit;
 		private Vector3 raycastStart;
+		private SplitController lastLiquid;
+		private GameObject lastContainer;
 
 		private bool TransferLiquid(RaycastHit hit, float lostPercentAmount, float scale)
         {
-			SplitController liquid = hit.collider.GetComponent<SplitController>();
+			
+			SplitController liquid;
+			GameObject container = hit.collider.gameObject;
+			//Is this the same object we already hit?
+			if (GameObject.ReferenceEquals(lastContainer, container))
+			{
+				liquid = lastLiquid;
+			} else
+			{
+				// We hit a different container from the last timee!
+				// Rather than doing expensive GetComponent, if were still hitting the same object, lets cache it
+				liquid = container.GetComponent<SplitController>();
+				lastContainer = container;
+
+			}
+
+			
+
 			if (liquid != null)
 			{
 				Vector3 otherBottleneck = liquid.GenerateBottleneckPos();
